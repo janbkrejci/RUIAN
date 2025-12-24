@@ -161,7 +161,7 @@
                 // Content-Type check (optional but good for debugging)
                 const contentType = response.headers.get("content-type");
                 if (contentType && contentType.indexOf("application/json") === -1) {
-                    throw new Error("Server vrátil HTML místo JSON. Ujistěte se, že je odesílána hlavička 'Accept: application/json'.");
+                    throw new Error("API vrátilo HTML místo JSON. Bez použití Proxy prohlížeč často nedostane data kvůli CORS a nastavení hlaviček. Zapněte prosím Proxy.");
                 }
 
                 const data = await response.json();
