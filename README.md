@@ -31,7 +31,7 @@ node proxy_server.js
 Server poběží na `http://localhost:3000`.
 
 ### 2. Spuštění Aplikace
-Otevřete soubor `address_autocomplete.html` ve svém prohlížeči.
+Otevřete soubor `index.html` ve svém prohlížeči.
 
 *   Zadejte adresu (např. "Toušice 22" nebo "Na Petřinách").
 *   Vyberte ze seznamu.
