@@ -1,6 +1,6 @@
 const http = require('http');
 const https = require('https');
-const url = require('url'); // Kept for legacy compatibility if needed, but we use new URL
+const url = require('url');
 
 const PORT = 3000;
 
@@ -8,9 +8,7 @@ const server = http.createServer((req, res) => {
     // Enable CORS for all
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept'); // Added Accept to allowed headers
-
-    console.log(`[${new Date().toISOString()}] Incoming request: ${req.method} ${req.url}`);
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -55,16 +53,13 @@ const server = http.createServer((req, res) => {
         method: 'GET',
         headers: {
             'Accept': 'application/json, text/xml',
+            // Force uncompressed response to avoid GZIP piping issues
             'Accept-Encoding': 'identity',
             'User-Agent': 'Mozilla/5.0 (Node.js Proxy)'
         }
     };
 
-    console.log(`[${new Date().toISOString()}] Forwarding to: https://${options.hostname}${options.path}`);
-
     const proxyReq = https.request(options, (proxyRes) => {
-        console.log(`[${new Date().toISOString()}] Upstream response: ${proxyRes.statusCode} ${proxyRes.statusMessage}`);
-
         // If it's the detail export, we want to parse it to JSON before sending back
         if (isXmlExport) {
             let xmlData = '';
@@ -91,12 +86,7 @@ const server = http.createServer((req, res) => {
                         return match ? match[1] : null;
                     };
 
-                    // Recursive parsing or just specific extraction?
-                    // Given the user wants to "play with json", let's build a flat map of relevant fields
-                    // or a simplified object tree.
-                    // Doing a full generic parser in one function is complex without deps.
                     // Let's create a "flatter" JSON object of all unique tags found.
-
                     const tags = xml.match(/<([a-zA-Z0-9]+)[^>]*>([^<]*)<\/\1>/g);
                     if (tags) {
                         tags.forEach(t => {
@@ -123,15 +113,13 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify(result));
             });
         } else {
-            // Standard proxy for autocomplete - Buffer and Log for debugging
+            // Standard proxy for autocomplete - Buffer for stability
             let responseData = '';
             proxyRes.on('data', chunk => responseData += chunk);
             proxyRes.on('end', () => {
-                console.log(`[${new Date().toISOString()}] Autocomplete Response Body Preview: ${responseData.substring(0, 500)}`);
-
                 res.writeHead(proxyRes.statusCode, {
                     'Content-Type': proxyRes.headers['content-type'] || 'application/json',
-                    'Access-Control-Allow-Origin': '*' // Ensure CORS headers are sent here too specifically if needed
+                    'Access-Control-Allow-Origin': '*'
                 });
                 res.end(responseData);
             });
@@ -149,5 +137,4 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`Proxy server running at http://localhost:${PORT}/`);
-    console.log(`Test: http://localhost:${PORT}/autocomplete?adresa=Praha`);
 });
