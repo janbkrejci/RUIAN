@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RUIAN Našeptávač (Verified)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f7;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #1d1d1f;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        .suggestions {
+            position: absolute;
+            width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            display: none;
+            margin-top: 4px;
+        }
+
+        .suggestion-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item:hover {
+            background-color: #f5f5f7;
+        }
+
+        .result-card {
+            background: #fff;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+        }
+
+        .label {
+            font-weight: 600;
+            color: #86868b;
+        }
+
+        .value {
+            color: #1d1d1f;
+            text-align: right;
+        }
+
+        .proxy-toggle {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>RUIAN Adresa</h1>
+
+        <div class="proxy-toggle">
+            <input type="checkbox" id="use-proxy" checked>
+            <label for="use-proxy">Použít Node.js Proxy (nutné pro oficiální data a XML export)</label>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="address-input" placeholder="Zadejte adresu (např. Toušice 22)..." autocomplete="off">
+            <div id="suggestions" class="suggestions"></div>
+        </div>
+
+        <div id="result" class="result-card">
+            <!-- Dynamic content will be injected here -->
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('address-input');
+        const suggestionsBox = document.getElementById('suggestions');
+        const resultCard = document.getElementById('result');
+        let debounceTimer;
+
+        input.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            const query = e.target.value;
+            if (query.length < 3) {
+                suggestionsBox.style.display = 'none';
+                return;
+            }
+            debounceTimer = setTimeout(() => fetchSuggestions(query), 300);
+        });
+
+        async function fetchSuggestions(query) {
+            try {
+                const useProxy = document.getElementById('use-proxy').checked;
+                let url;
+                if (useProxy) {
+                    url = `http://localhost:3000/autocomplete?adresa=${encodeURIComponent(query)}`;
+                } else {
+                    // Direct call requires CORS extension or similar, usually fails in vanilla browser
+                    url = `https://vdp.cuzk.gov.cz/vdp/ruian/adresnimista/fulltext?adresa=${encodeURIComponent(query)}`;
+                }
+
+                const response = await fetch(url, {
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (response.status === 404) return; // No results
+
+                // Content-Type check (optional but good for debugging)
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") === -1) {
+                    throw new Error("Server vrátil HTML místo JSON. Ujistěte se, že je odesílána hlavička 'Accept: application/json'.");
+                }
+
+                const data = await response.json();
+                renderSuggestions(data.polozky || []); // API returns { polozky: [...] } structure
+            } catch (error) {
+                console.error('Chyba našeptávače:', error);
+            }
+        }
+
+        function renderSuggestions(items) {
+            suggestionsBox.innerHTML = '';
+            if (!items || items.length === 0) {
+                suggestionsBox.style.display = 'none';
+                return;
+            }
+
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.textContent = item.nazev; // 'nazev' contains the full string
+                div.onclick = () => {
+                    input.value = item.nazev;
+                    suggestionsBox.style.display = 'none';
+                    fetchDetails(item.kod);
+                };
+                suggestionsBox.appendChild(div);
+            });
+            suggestionsBox.style.display = 'block';
+        }
+
+        async function fetchDetails(kod) {
+            try {
+                const useProxy = document.getElementById('use-proxy').checked;
+
+                if (useProxy) {
+                    // Call our proxy which parses the official XML export into clean JSON
+                    const url = `http://localhost:3000/detail?kod=${kod}`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error);
+                    displayAddressData(data); // Display verified data
+                } else {
+                    // Fallback to direct client-side XML if proxy is disabled (not recommended)
+                    const url = `https://vdp.cuzk.gov.cz/vdp/ruian/adresnimista?kodAdAc=${kod}&mediaType=xml`;
+                    const response = await fetch(url);
+                    const text = await response.text();
+                    console.log('Klient XML Fallback:', text);
+                    alert("Pro plnou funkčnost a kompletní data prosím použijte Proxy.");
+                    // We don't implement full parsing here as the proxy is the verified solution
+                }
+            } catch (error) {
+                console.error('Chyba detailu:', error);
+                resultCard.innerHTML = `<div style="color:red">Chyba načítání dat: ${error.message}</div>`;
+                resultCard.style.display = 'block';
+            }
+        }
+
+        function displayAddressData(data) {
+            // 1. Official Address String (Vyhláška č. 359/2011 Sb.)
+            // Logic based on analysis of official output and decree text.
+
+            const ulice = data.UliceNazev || '';
+            const cisloDom = data.CisloDomovni || '';
+            const cisloOr = data.CisloOrientacni || '';
+            const cisloEv = data.CisloEvidencni || '';
+            const castObce = data.CastObceNazev || '';
+            const obec = data.ObecNazev || '';
+            const psc = data.Psc || '';
+
+            let line1 = '';
+            if (ulice) {
+                line1 += ulice + ' ';
+                // If street is present, House Number is typically normative
+                if (cisloEv) line1 += `č.ev. ${cisloEv}`;
+                else if (cisloDom) line1 += cisloDom;
+            } else {
+                // If no street, "č.p." or "č.ev." is mandatory prefix
+                if (cisloEv) line1 += `č.ev. ${cisloEv}`;
+                else if (cisloDom) line1 += `č.p. ${cisloDom}`;
+            }
+
+            // Orientation number is always appended with '/' if it exists, regardless of street
+            if (cisloOr) {
+                line1 += `/${cisloOr}`;
+            }
+
+            const line2 = castObce;
+            // In Prague (or generally), if CastObce is same as Obec, it's often omitted in postal addresses
+            // BUT Vyhlaska 359/2011 says Line 2 is CastObce. Period.
+
+            const line3 = `${psc} ${obec}`;
+
+            // Join with commas for single line display
+            const officialString = [line1, line2, line3].filter(Boolean).join(', ');
+
+            // 2. Dynamic Structured Data Table
+            // Render specific "Human Readable" Summary first, then full raw table
+            let html = `
+                <h3 style="margin-top:0">Oficiální Adresa (Vyhl. 359/2011 Sb.)</h3>
+                <div style="font-size: 1.2em; font-weight: bold; color: #333; padding: 15px; background: #e9ecef; border-radius: 6px; border-left: 5px solid #007aff; margin-bottom: 25px;">
+                    ${officialString}
+                </div>
+                
+                <div style="margin-bottom: 25px;">
+                    <a href="https://mapy.cz/zakladni?q=${encodeURIComponent(officialString)}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #e53935; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">
+                        📍 Zobrazit na mapě (Mapy.cz)
+                    </a>
+                </div>
+                
+                <h3>Kompletní Strukturovaná Data (Všechny atributy)</h3>
+                <div style="overflow-x: auto; border: 1px solid #eee; border-radius: 8px;">
+                <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+                    <thead style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                        <tr>
+                            <th style="text-align: left; padding: 12px; color: #555;">Atribut XML</th>
+                            <th style="text-align: left; padding: 12px; color: #555;">Hodnota</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            // Sort keys specifically: Place Address components first, then IDs, then others
+            const priorityKeys = ['UliceNazev', 'CisloDomovni', 'CisloOrientacni', 'CisloEvidencni', 'CastObceNazev', 'ObecNazev', 'Psc', 'OkresNazev'];
+            const allKeys = Object.keys(data).sort();
+
+            // Render priority keys first
+            priorityKeys.forEach(key => {
+                if (data[key]) {
+                    html += `
+                        <tr style="border-bottom: 1px solid #f0f0f0; background-color: #fff;">
+                            <td style="padding: 10px 12px; font-family: monospace; color: #007aff; width: 40%;">${key}</td>
+                            <td style="padding: 10px 12px; font-weight: 500;">${data[key]}</td>
+                        </tr>`;
+                }
+            });
+
+            // Render remaining keys
+            allKeys.forEach(key => {
+                if (!priorityKeys.includes(key) && data[key]) {
+                    html += `
+                        <tr style="border-bottom: 1px solid #f0f0f0;">
+                            <td style="padding: 10px 12px; font-family: monospace; color: #666; width: 40%;">${key}</td>
+                            <td style="padding: 10px 12px;">${data[key]}</td>
+                        </tr>`;
+                }
+            });
+
+            html += `</tbody></table></div>`;
+            resultCard.innerHTML = html;
+            resultCard.style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>
