@@ -146,7 +146,7 @@
                 const useProxy = document.getElementById('use-proxy').checked;
                 let url;
                 if (useProxy) {
-                    url = `http://localhost:3000/autocomplete?adresa=${encodeURIComponent(query)}`;
+                    url = `http://127.0.0.1:3000/autocomplete?adresa=${encodeURIComponent(query)}`;
                 } else {
                     // Direct call requires CORS extension or similar, usually fails in vanilla browser
                     url = `https://vdp.cuzk.gov.cz/vdp/ruian/adresnimista/fulltext?adresa=${encodeURIComponent(query)}`;
@@ -198,7 +198,7 @@
 
                 if (useProxy) {
                     // Call our proxy which parses the official XML export into clean JSON
-                    const url = `http://localhost:3000/detail?kod=${kod}`;
+                    const url = `http://127.0.0.1:3000/detail?kod=${kod}`;
                     const response = await fetch(url);
                     const data = await response.json();
                     if (data.error) throw new Error(data.error);

@@ -3,6 +3,7 @@ const https = require('https');
 const url = require('url');
 
 const PORT = 3000;
+const HOST = '127.0.0.1';
 
 const server = http.createServer((req, res) => {
     // Enable CORS for all
@@ -135,6 +136,6 @@ const server = http.createServer((req, res) => {
     proxyReq.end();
 });
 
-server.listen(PORT, () => {
-    console.log(`Proxy server running at http://localhost:${PORT}/`);
+server.listen(PORT, HOST, () => {
+    console.log(`Proxy server running at http://${HOST}:${PORT}/`);
 });
